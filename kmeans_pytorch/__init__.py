@@ -9,6 +9,7 @@ import pickle
 
 import torch
 
+@torch.no_grad()
 def auction_lap(job_and_worker_to_score, return_token_to_worker=True):
     """
     Solving the balanced linear assignment problem with auction algorithm.
@@ -119,6 +120,7 @@ class KMeans(object):
         initial_state = X[indices]
         return initial_state
     
+    @torch.no_grad()
     def fit(
             self,
             X,
@@ -284,20 +286,32 @@ class KMeans(object):
             return cluster_assignments.cpu()
 
 
-def pairwise_distance(data1, data2, device=torch.device('cpu'), tqdm_flag=True):
+def pairwise_distance(data1, data2, device=torch.device('cpu'), tqdm_flag=True, CHUNK_SIZE=2000):
     # transfer to device
     if device != torch.device('cpu'):
         data1, data2 = data1.to(device), data2.to(device)
 
-    # N*1*M
-    A = data1.unsqueeze(dim=1)
+    if CHUNK_SIZE:
+        i = 0
+        out = []
+        while i * CHUNK_SIZE < data1.size(0):
+            chunk = data1[i * CHUNK_SIZE: (i+1) * CHUNK_SIZE]
+            chunk_dist = (chunk.unsqueeze(1) - data2.unsqueeze(0)).pow(2).sum(-1)
+            out += [chunk_dist]
+            i += 1
 
-    # 1*N*M
-    B = data2.unsqueeze(dim=0)
+        dis = torch.cat(out)
+    else:
+        # N*1*M
+        A = data1.unsqueeze(dim=1)
 
-    dis = (A - B) ** 2.0
-    # return N*N matrix for pairwise distance
-    dis = dis.sum(dim=-1).squeeze()
+        # 1*N*M
+        B = data2.unsqueeze(dim=0)
+
+        dis = (A - B) ** 2.0
+        # return N*N matrix for pairwise distance
+        dis = dis.sum(dim=-1).squeeze()
+
     return dis
 
 
